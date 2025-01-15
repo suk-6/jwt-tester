@@ -1,9 +1,15 @@
-import uvicorn
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from jose import jwt
 from uuid import uuid4
 from datetime import datetime, timedelta, timezone
+
+import uvicorn
+from typing import Annotated
+from fastapi import Depends, FastAPI
+from fastapi.security import (
+    APIKeyHeader,
+)
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI()
 
@@ -14,6 +20,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+oauth2_scheme = APIKeyHeader(name="Authorization")
+
+
+def getHeaderToken(Authorization: str = Depends(oauth2_scheme)):
+    if Authorization.startswith("Bearer "):
+        return Authorization.split("Bearer ")[1]
+    else:
+        return Authorization
 
 
 def makeJWT(second, data):
@@ -54,7 +70,9 @@ async def get_token(second: int = 20):
 
 
 @app.get("/refresh")
-async def refresh_token(refreshToken: str, second: int = 20):
+async def refresh_token(
+    refreshToken: Annotated[str, Depends(getHeaderToken)], second: int = 20
+):
     try:
         data = jwt.decode(refreshToken, "secret", algorithms=["HS256"])
         if data["type"] == "refresh":
@@ -75,7 +93,9 @@ async def refresh_token(refreshToken: str, second: int = 20):
 
 
 @app.get("/info")
-async def get_info(accessToken: str, key: str = "id"):
+async def get_info(
+    accessToken: Annotated[str, Depends(getHeaderToken)], key: str = "id"
+):
     """key: id, name, age, job, region"""
     try:
         data = jwt.decode(accessToken, "secret", algorithms=["HS256"])
